@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>発想メモワールド</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif}
+#app{position:fixed;inset:0;overflow:hidden;background:#000}
+#stars{position:absolute;inset:-50%;pointer-events:none;background-image:
+ radial-gradient(1.5px 1.5px at 20px 30px,#fff 50%,transparent 51%),
+ radial-gradient(1px 1px at 130px 90px,rgba(255,255,255,.8) 50%,transparent 51%),
+ radial-gradient(1.2px 1.2px at 70px 160px,rgba(255,255,255,.6) 50%,transparent 51%),
+ radial-gradient(1px 1px at 190px 200px,rgba(255,255,255,.9) 50%,transparent 51%),
+ radial-gradient(1.6px 1.6px at 240px 60px,rgba(255,255,255,.7) 50%,transparent 51%),
+ radial-gradient(1px 1px at 300px 140px,rgba(255,255,255,.5) 50%,transparent 51%);
+ background-size:340px 260px;opacity:.55}
+#viewport{position:absolute;inset:0;touch-action:none;overflow:hidden}
+#world{position:absolute;left:0;top:0;width:10px;height:10px;transform-origin:0 0}
+svg#edges{position:absolute;left:0;top:0;width:10px;height:10px;overflow:visible;pointer-events:none}
+svg#edges path{fill:none;stroke:rgba(230,235,255,.55);stroke-width:2.2;stroke-linecap:round;pointer-events:stroke}
+svg#edges path.temp{stroke:rgba(255,211,77,.8);stroke-dasharray:6 6}
+.node{position:absolute;min-width:84px;max-width:210px;padding:12px 14px;border-radius:14px;border:2.5px solid #e8e8e8;background:rgba(14,15,22,.93);color:#fff;font-size:15px;line-height:1.45;white-space:pre-wrap;word-break:break-word;transform:translate(-50%,-50%);cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;box-shadow:0 2px 18px rgba(0,0,0,.6)}
+.node[data-kind="origin"]{border-color:#ffd34d;box-shadow:0 0 18px rgba(255,211,77,.35)}
+.node[data-kind="goal"]{border-color:#54d8ff;box-shadow:0 0 18px rgba(84,216,255,.30)}
+.node[data-kind="merge"]{border-color:#3ddc84;box-shadow:0 0 18px rgba(61,220,132,.30)}
+.node.selected{outline:2px solid rgba(255,255,255,.85);outline-offset:3px}
+.node.candidate{outline:2px dashed #3ddc84;outline-offset:4px}
+.node.dragging{cursor:grabbing;opacity:.92;z-index:5}
+.port{position:absolute;right:-9px;top:50%;width:18px;height:18px;margin-top:-9px;border-radius:50%;background:#ffd34d;box-shadow:0 0 12px 3px rgba(255,211,77,.75);display:none;touch-action:none;cursor:crosshair;z-index:6}
+.node.selected .port{display:block}
+#topbar{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:12px;z-index:20}
+#worldBtn{background:rgba(20,20,28,.82);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:8px 16px;font-size:15px;backdrop-filter:blur(6px)}
+#hint{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);text-align:center;font-size:11.5px;color:rgba(255,255,255,.42);z-index:20;pointer-events:none}
+#mergeBar{position:absolute;top:calc(env(safe-area-inset-top,0px) + 56px);left:50%;transform:translateX(-50%);z-index:21;background:rgba(20,40,28,.9);border:1px solid #3ddc84;color:#c9ffe0;border-radius:999px;padding:6px 14px;font-size:13px;display:none}
+#sheetWrap{position:fixed;inset:0;z-index:50;display:none}
+#sheetBg{position:absolute;inset:0;background:rgba(0,0,0,.45)}
+#sheet{position:absolute;left:0;right:0;bottom:0;background:#14151d;border-radius:20px 20px 0 0;padding:8px 18px calc(env(safe-area-inset-bottom,0px) + 18px);touch-action:none;box-shadow:0 -6px 30px rgba(0,0,0,.7)}
+#handle{width:44px;height:5px;border-radius:3px;background:rgba(255,255,255,.35);margin:2px auto 12px}
+#sheetText{width:100%;min-height:74px;max-height:32vh;background:transparent;border:none;outline:none;color:#fff;font-size:17px;line-height:1.5;resize:none;font-family:inherit}
+#colorRow{display:flex;gap:16px;align-items:center;margin-top:8px}
+.cdot{width:30px;height:30px;border-radius:50%;border:2.5px solid #e8e8e8;background:transparent;padding:0;cursor:pointer}
+.cdot[data-kind="origin"]{border-color:#ffd34d;background:rgba(255,211,77,.25)}
+.cdot[data-kind="goal"]{border-color:#54d8ff;background:rgba(84,216,255,.22)}
+.cdot[data-kind="merge"]{border-color:#3ddc84;background:rgba(61,220,132,.22)}
+.cdot.on{box-shadow:0 0 0 2.5px #fff;transform:scale(1.18)}
+#delBtn{margin-left:auto;background:none;border:none;color:rgba(255,120,120,.9);font-size:20px;padding:4px 6px;cursor:pointer}
+#worldSheet{position:fixed;inset:0;z-index:60;display:none}
+#worldSheetBg{position:absolute;inset:0;background:rgba(0,0,0,.5)}
+#worldPanel{position:absolute;left:0;right:0;bottom:0;background:#14151d;border-radius:20px 20px 0 0;padding:10px 18px calc(env(safe-area-inset-bottom,0px) + 20px);max-height:70vh;overflow:auto}
+.wrow{display:flex;align-items:center;gap:10px;padding:13px 4px;border-bottom:1px solid rgba(255,255,255,.08);font-size:16px;cursor:pointer}
+.wrow .cnt{margin-left:auto;color:rgba(255,255,255,.45);font-size:13px}
+.wrow .wact{background:none;border:none;color:rgba(255,255,255,.55);font-size:16px;padding:4px}
+#newWorld{width:100%;margin-top:14px;background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:12px;font-size:15px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stars"></div>
+  <div id="viewport">
+    <div id="world">
+      <svg id="edges" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div id="nodes"></div>
+    </div>
+  </div>
+  <div id="topbar"><button id="worldBtn"></button></div>
+  <div id="mergeBar"></div>
+  <div id="hint">ダブルタップでメモ追加</div>
+</div>
+
+<div id="sheetWrap">
+  <div id="sheetBg"></div>
+  <div id="sheet">
+    <div id="handle"></div>
+    <textarea id="sheetText" placeholder="メモ"></textarea>
+    <div id="colorRow">
+      <button class="cdot" data-kind="normal" aria-label="通常"></button>
+      <button class="cdot" data-kind="origin" aria-label="起点"></button>
+      <button class="cdot" data-kind="goal" aria-label="ゴール"></button>
+      <button class="cdot" data-kind="merge" aria-label="統合"></button>
+      <button id="delBtn" title="削除">🗑</button>
+    </div>
+  </div>
+</div>
+
+<div id="worldSheet">
+  <div id="worldSheetBg"></div>
+  <div id="worldPanel">
+    <div id="worldList"></div>
+    <button id="newWorld">＋ ワールド</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+var LS_KEY = "hasso-memo-world-v1";
+var KIND_COLOR = { normal:"#e8e8e8", origin:"#ffd34d", goal:"#54d8ff", merge:"#3ddc84" };
+var SEED = {"worlds":[{"name":"発想","nodes":[{"id":1,"kind":"origin","text":"ドーパミン快感","x":626.448,"y":1219.193},{"id":2,"kind":"origin","text":"物理","x":352.937,"y":1373.678},{"id":3,"kind":"origin","text":"操作感","x":453.983,"y":1285.683},{"id":4,"kind":"origin","text":"平成回帰","x":369.579,"y":1469.760}],"edges":[{"from":2,"to":3},{"from":3,"to":1},{"from":4,"to":2}]}]};
+
+var uidCounter = 1;
+function uid(){ return Date.now().toString(36) + "-" + (uidCounter++).toString(36) + Math.floor(Math.random()*1e6).toString(36); }
+
+function seedState(){
+  var worlds = SEED.worlds.map(function(w){
+    var idMap = {};
+    var nodes = w.nodes.map(function(n){ var nid = uid(); idMap[n.id]=nid; return {id:nid, kind:n.kind, text:n.text, x:n.x, y:n.y, anchor:null}; });
+    var edges = w.edges.map(function(e){
+      var from = nodes.filter(function(n){return n.id===idMap[e.from];})[0];
+      var to = nodes.filter(function(n){return n.id===idMap[e.to];})[0];
+      var ed = {id:uid(), from:from.id, to:to.id, anchor:null};
+      return ed;
+    });
+    return {id:uid(), name:w.name, nodes:nodes, edges:edges};
+  });
+  return { worlds:worlds, currentId:worlds[0].id, seeded:true };
+}
+function load(){
+  try{
+    var raw = localStorage.getItem(LS_KEY);
+    if(raw){ var s = JSON.parse(raw); if(s && s.worlds && s.worlds.length) return s; }
+  }catch(e){}
+  var s2 = seedState(); save(s2); return s2;
+}
+function save(s){ try{ localStorage.setItem(LS_KEY, JSON.stringify(s || state)); }catch(e){} }
+
+var state = load();
+var view = { x:0, y:0, scale:1 };
+var sizes = {}; // nodeId -> {w,h}
+var selectedId = null;
+var candidates = {}; // merge candidate ids
+var tempPath = null; // {fromId, x, y}
+
+function cur(){ return state.worlds.filter(function(w){return w.id===state.currentId;})[0] || state.worlds[0]; }
+function nodeById(id){ var w=cur(); return w ? w.nodes.filter(function(n){return n.id===id;})[0] : null; }
+function sizeOf(n){ return sizes[n.id] || { w:150, h:64 }; }
+
+/* ---------- geometry ---------- */
+function borderPoint(n, tx, ty){
+  var s = sizeOf(n), hw = s.w/2, hh = s.h/2;
+  var dx = tx - n.x, dy = ty - n.y;
+  if(dx===0 && dy===0) dx = 1;
+  var t = Infinity;
+  if(dx!==0) t = Math.min(t, hw/Math.abs(dx));
+  if(dy!==0) t = Math.min(t, hh/Math.abs(dy));
+  return { x:n.x + dx*t, y:n.y + dy*t };
+}
+function anchorPoint(n, a){
+  // a = {dx,dy} perimeter position stored relative to node: point = center + (dx*hw, dy*hh) with max(|dx|,|dy|)=1
+  var s = sizeOf(n);
+  return { x:n.x + a.dx*(s.w/2), y:n.y + a.dy*(s.h/2) };
+}
+function makeAnchor(fromNode, startPt){
+  var s = sizeOf(fromNode);
+  var dx = (startPt.x - fromNode.x)/(s.w/2), dy = (startPt.y - fromNode.y)/(s.h/2);
+  var m = Math.max(Math.abs(dx), Math.abs(dy)) || 1;
+  return { dx:dx/m, dy:dy/m };
+}
+function rectOf(n){ var s=sizeOf(n); return { l:n.x-s.w/2, r:n.x+s.w/2, t:n.y-s.h/2, b:n.y+s.h/2 }; }
+function segHitsRect(p1, p2, r, pad){
+  // sample-based test, good enough for routing hints
+  for(var i=1;i<10;i++){
+    var t=i/10, x=p1.x+(p2.x-p1.x)*t, y=p1.y+(p2.y-p1.y)*t;
+    if(x>r.l-pad && x<r.r+pad && y>r.t-pad && y<r.b+pad) return true;
+  }
+  return false;
+}
+function smoothPath(pts){
+  if(pts.length<3) return "M "+pts[0].x+" "+pts[0].y+" L "+pts[pts.length-1].x+" "+pts[pts.length-1].y;
+  var d = "M "+pts[0].x+" "+pts[0].y;
+  for(var i=0;i<pts.length-1;i++){
+    var p0 = pts[Math.max(0,i-1)], p1 = pts[i], p2 = pts[i+1], p3 = pts[Math.min(pts.length-1,i+2)];
+    var c1x = p1.x + (p2.x-p0.x)/6, c1y = p1.y + (p2.y-p0.y)/6;
+    var c2x = p2.x - (p3.x-p1.x)/6, c2y = p2.y - (p3.y-p1.y)/6;
+    d += " C "+c1x.toFixed(1)+" "+c1y.toFixed(1)+", "+c2x.toFixed(1)+" "+c2y.toFixed(1)+", "+p2.x.toFixed(1)+" "+p2.y.toFixed(1);
+  }
+  return d;
+}
+function edgeGeom(e){
+  var a = nodeById(e.from), b = nodeById(e.to);
+  if(!a || !b) return null;
+  if(!e.anchor){ var bp0 = borderPoint(a, b.x, b.y); e.anchor = makeAnchor(a, bp0); }
+  var start = anchorPoint(a, e.anchor);
+  var end = borderPoint(b, start.x, start.y);
+  var dirx = end.x-start.x, diry = end.y-start.y;
+  var dist = Math.hypot(dirx, diry) || 1;
+  var ux = dirx/dist, uy = diry/dist;
+  var bend = Math.min(90, dist*0.25);
+  var pts = [ start,
+    { x:start.x + ux*bend - uy*bend*0.35, y:start.y + uy*bend + ux*bend*0.35 },
+    { x:end.x - ux*bend - uy*bend*0.35, y:end.y - uy*bend + ux*bend*0.35 },
+    end ];
+  // avoid intermediate memo bodies: if the mid area hits another node, push mids perpendicular away
+  var w = cur();
+  for(var k=0;k<w.nodes.length;k++){
+    var n = w.nodes[k];
+    if(n.id===a.id || n.id===b.id) continue;
+    var r = rectOf(n);
+    if(segHitsRect(pts[1], pts[2], r, 26)){
+      var side = ((pts[1].x+pts[2].x)/2 - n.x) * (-uy) + ((pts[1].y+pts[2].y)/2 - n.y) * (ux) >= 0 ? 1 : -1;
+      var push = Math.max(sizeOf(n).w, sizeOf(n).h)/2 + 46;
+      pts[1] = { x:pts[1].x - uy*push*side, y:pts[1].y + ux*push*side };
+      pts[2] = { x:pts[2].x - uy*push*side, y:pts[2].y + ux*push*side };
+    }
+  }
+  return { d:smoothPath(pts), end:end, start:start };
+}
+/* ---------- rendering ---------- */
+var viewport = document.getElementById("viewport");
+var worldEl = document.getElementById("world");
+var nodesEl = document.getElementById("nodes");
+var edgesEl = document.getElementById("edges");
+var starsEl = document.getElementById("stars");
+var worldBtn = document.getElementById("worldBtn");
+var mergeBar = document.getElementById("mergeBar");
+
+function applyView(){
+  worldEl.style.transform = "translate("+view.x+"px,"+view.y+"px) scale("+view.scale+")";
+  starsEl.style.transform = "translate("+(view.x*0.25%340)+"px,"+(view.y*0.25%260)+"px)";
+}
+function render(){
+  var w = cur(); if(!w) return;
+  worldBtn.textContent = w.name + " ▾";
+  nodesEl.innerHTML = "";
+  w.nodes.forEach(function(n){
+    var el = document.createElement("div");
+    el.className = "node" + (n.id===selectedId ? " selected" : "") + (candidates[n.id] ? " candidate" : "");
+    el.dataset.kind = n.kind; el.dataset.id = n.id;
+    el.style.left = n.x+"px"; el.style.top = n.y+"px";
+    el.textContent = n.text;
+    var port = document.createElement("div"); port.className = "port"; port.dataset.port = n.id;
+    el.appendChild(port);
+    nodesEl.appendChild(el);
+  });
+  // measure
+  Array.prototype.forEach.call(nodesEl.children, function(el){
+    sizes[el.dataset.id] = { w:el.offsetWidth, h:el.offsetHeight };
+  });
+  var html = "";
+  w.edges.forEach(function(e){
+    var g = edgeGeom(e); if(!g) return;
+    html += '<path data-edge="'+e.id+'" d="'+g.d+'"/>';
+    var b = nodeById(e.to);
+    html += '<circle cx="'+g.end.x.toFixed(1)+'" cy="'+g.end.y.toFixed(1)+'" r="6.5" fill="'+KIND_COLOR[b.kind]+'" stroke="#000" stroke-width="1.4"/>';
+  });
+  if(tempPath){
+    var a = nodeById(tempPath.fromId);
+    if(a){
+      var sp = e_startFor(a, tempPath.x, tempPath.y);
+      html += '<path class="temp" d="'+smoothPath([sp,{x:(sp.x+tempPath.x)/2,y:(sp.y+tempPath.y)/2 - 20}, {x:tempPath.x,y:tempPath.y}])+'"/>';
+    }
+  }
+  edgesEl.innerHTML = html;
+  var ccount = Object.keys(candidates).length;
+  if(ccount>0){ mergeBar.style.display="block"; mergeBar.textContent = "統合："+ccount+"件 選択中（空き場所タップで統合先を作成）"; }
+  else mergeBar.style.display="none";
+  applyView();
+}
+function e_startFor(a, tx, ty){
+  // for temp line, use border point toward pointer
+  return borderPoint(a, tx, ty);
+}
+function toWorld(sx, sy){
+  var r = viewport.getBoundingClientRect();
+  return { x:(sx - r.left - view.x)/view.scale, y:(sy - r.top - view.y)/view.scale };
+}
+function fitWorld(){
+  var w = cur(); if(!w || !w.nodes.length) { view={x:0,y:0,scale:1}; render(); return; }
+  var minX=1e18,maxX=-1e18,minY=1e18,maxY=-1e18;
+  w.nodes.forEach(function(n){ var s=sizeOf(n); minX=Math.min(minX,n.x-s.w/2); maxX=Math.max(maxX,n.x+s.w/2); minY=Math.min(minY,n.y-s.h/2); maxY=Math.max(maxY,n.y+s.h/2); });
+  var vw = viewport.clientWidth, vh = viewport.clientHeight, pad = 42;
+  var sc = Math.min((vw-pad*2)/Math.max(1,(maxX-minX)), (vh-pad*2)/Math.max(1,(maxY-minY)), 1.4);
+  view.scale = sc;
+  view.x = vw/2 - (minX+maxX)/2*sc;
+  view.y = vh/2 - (minY+maxY)/2*sc;
+  render();
+}
+
+/* ---------- mutations ---------- */
+function addEdge(fromId, toId){
+  var w = cur();
+  if(fromId===toId) return null;
+  var exists = w.edges.some(function(e){return e.from===fromId && e.to===toId;});
+  if(exists) return null;
+  var a = nodeById(fromId), b = nodeById(toId);
+  var bp = borderPoint(a, b.x, b.y);
+  var e = { id:uid(), from:fromId, to:toId, anchor:makeAnchor(a, bp) };
+  w.edges.push(e); return e;
+}
+function addNode(text, kind, x, y){
+  var w = cur();
+  var n = { id:uid(), kind:kind||"normal", text:text, x:x, y:y };
+  w.nodes.push(n); return n;
+}
+function deleteNode(id){
+  var w = cur();
+  w.nodes = w.nodes.filter(function(n){return n.id!==id;});
+  w.edges = w.edges.filter(function(e){return e.from!==id && e.to!==id;});
+  if(selectedId===id) selectedId = null;
+  delete candidates[id];
+}
+
+/* ---------- bottom sheet ---------- */
+var sheetWrap = document.getElementById("sheetWrap");
+var sheetEl = document.getElementById("sheet");
+var sheetText = document.getElementById("sheetText");
+var delBtn = document.getElementById("delBtn");
+var sheetCtx = null; // {mode:'new'|'edit', nodeId, x, y, kind, connectFrom:[], mergeFrom:[]}
+function openSheet(ctx){
+  sheetCtx = ctx;
+  sheetText.value = ctx.text || "";
+  delBtn.style.display = ctx.mode==="edit" ? "block" : "none";
+  updateColorRow(ctx.kind || "normal");
+  sheetWrap.style.display = "block";
+  sheetEl.style.transition = "transform .22s ease"; sheetEl.style.transform = "translateY(0)";
+  setTimeout(function(){ sheetText.focus(); }, 60);
+}
+function updateColorRow(kind){
+  if(sheetCtx) sheetCtx.kind = kind;
+  Array.prototype.forEach.call(document.querySelectorAll(".cdot"), function(b){
+    b.classList.toggle("on", b.dataset.kind===kind);
+  });
+}
+Array.prototype.forEach.call(document.querySelectorAll(".cdot"), function(b){
+  b.addEventListener("click", function(){ updateColorRow(b.dataset.kind); });
+});
+function closeSheet(commit){
+  if(!sheetCtx){ sheetWrap.style.display="none"; return; }
+  var ctx = sheetCtx; sheetCtx = null;
+  if(commit){
+    var text = sheetText.value.trim();
+    if(ctx.mode==="edit"){
+      var n = nodeById(ctx.nodeId);
+      if(n){ if(text) { n.text = text; n.kind = ctx.kind; } }
+    } else if(text){
+      var nn = addNode(text, ctx.kind, ctx.x, ctx.y);
+      (ctx.connectFrom||[]).forEach(function(fid){ addEdge(fid, nn.id); });
+      (ctx.mergeFrom||[]).forEach(function(fid){ if(fid!==nn.id) addEdge(fid, nn.id); });
+      selectedId = nn.id;
+    }
+    save();
+  }
+  sheetEl.style.transition = "transform .2s ease"; sheetEl.style.transform = "translateY(110%)";
+  setTimeout(function(){ sheetWrap.style.display="none"; sheetEl.style.transform=""; render(); }, 180);
+  render();
+}
+delBtn.addEventListener("click", function(){
+  if(sheetCtx && sheetCtx.mode==="edit"){ var id = sheetCtx.nodeId; sheetCtx=null; deleteNode(id); save(); sheetWrap.style.display="none"; render(); }
+});
+document.getElementById("sheetBg").addEventListener("click", function(){ closeSheet(true); });
+// swipe-down to close
+(function(){
+  var sy=null, dy=0, st=0;
+  sheetEl.addEventListener("pointerdown", function(ev){
+    if(ev.target===sheetText) return;
+    sy = ev.clientY; dy = 0; st = Date.now();
+    sheetEl.style.transition = "none";
+    sheetEl.setPointerCapture(ev.pointerId);
+  });
+  sheetEl.addEventListener("pointermove", function(ev){
+    if(sy===null) return;
+    dy = Math.max(0, ev.clientY - sy);
+    sheetEl.style.transform = "translateY("+dy+"px)";
+  });
+  sheetEl.addEventListener("pointerup", function(ev){
+    if(sy===null) return;
+    var dt = Date.now()-st, vel = dy/Math.max(1,dt);
+    var shouldClose = dy>90 || (dy>28 && vel>0.55);
+    sy = null;
+    if(shouldClose){ sheetEl.style.transform=""; closeSheet(true); }
+    else { sheetEl.style.transition="transform .2s ease"; sheetEl.style.transform="translateY(0)"; }
+  });
+  sheetEl.addEventListener("pointercancel", function(){ sy=null; sheetEl.style.transform="translateY(0)"; });
+})();
+
+/* ---------- world sheet ---------- */
+var worldSheet = document.getElementById("worldSheet");
+function openWorlds(){
+  var list = document.getElementById("worldList"); list.innerHTML = "";
+  state.worlds.forEach(function(w){
+    var row = document.createElement("div"); row.className="wrow";
+    var name = document.createElement("span"); name.textContent = (w.id===state.currentId?"● ":"")+w.name;
+    var cnt = document.createElement("span"); cnt.className="cnt"; cnt.textContent = w.nodes.length+"件";
+    var ren = document.createElement("button"); ren.className="wact"; ren.textContent="✎";
+    ren.addEventListener("click", function(ev){ ev.stopPropagation(); var nv = prompt("ワールド名", w.name); if(nv && nv.trim()){ w.name = nv.trim(); save(); openWorlds(); render(); } });
+    var del = document.createElement("button"); del.className="wact"; del.textContent="🗑";
+    del.addEventListener("click", function(ev){ ev.stopPropagation(); if(state.worlds.length<=1){ alert("最後のワールドは削除できません"); return; } if(confirm("ワールド「"+w.name+"」を削除しますか？")){ state.worlds = state.worlds.filter(function(x){return x.id!==w.id;}); if(state.currentId===w.id) state.currentId = state.worlds[0].id; selectedId=null; candidates={}; save(); openWorlds(); render(); } });
+    row.appendChild(name); row.appendChild(cnt); row.appendChild(ren); row.appendChild(del);
+    row.addEventListener("click", function(){ state.currentId = w.id; selectedId=null; candidates={}; save(); worldSheet.style.display="none"; render(); fitWorld(); });
+    list.appendChild(row);
+  });
+  worldSheet.style.display = "block";
+}
+worldBtn.addEventListener("click", openWorlds);
+document.getElementById("worldSheetBg").addEventListener("click", function(){ worldSheet.style.display="none"; render(); });
+document.getElementById("newWorld").addEventListener("click", function(){
+  var nv = prompt("新しいワールド名", "");
+  if(nv===null) return;
+  var w = { id:uid(), name:nv.trim()||"ワールド", nodes:[], edges:[] };
+  state.worlds.push(w); state.currentId = w.id; selectedId=null; candidates={};
+  save(); worldSheet.style.display="none"; view={x:0,y:0,scale:1}; render();
+});
+
+/* ---------- gestures ---------- */
+var pointers = {};
+var gesture = null; // {type:'pan'|'node'|'port', ...}
+var lastTap = { t:0, x:0, y:0, nodeId:null };
+var longTimer = null;
+
+function nodeElFromEvent(ev){
+  var el = ev.target;
+  while(el && el!==viewport){ if(el.classList && el.classList.contains("node")) return el; el = el.parentNode; }
+  return null;
+}
+function clearLong(){ if(longTimer){ clearTimeout(longTimer); longTimer=null; } }
+
+viewport.addEventListener("pointerdown", function(ev){
+  pointers[ev.pointerId] = { x:ev.clientX, y:ev.clientY };
+  if(Object.keys(pointers).length===2){
+    var ps = Object.values(pointers);
+    gesture = { type:"pinch", d0:Math.hypot(ps[0].x-ps[1].x, ps[0].y-ps[1].y), scale0:view.scale, cx:(ps[0].x+ps[1].x)/2, cy:(ps[0].y+ps[1].y)/2, vx:view.x, vy:view.y };
+    clearLong(); return;
+  }
+  var portEl = ev.target && ev.target.classList && ev.target.classList.contains("port") ? ev.target : null;
+  var nEl = nodeElFromEvent(ev);
+  var wp = toWorld(ev.clientX, ev.clientY);
+  if(portEl){
+    var fid = portEl.dataset.port;
+    gesture = { type:"port", fromId:fid, moved:false };
+    tempPath = { fromId:fid, x:wp.x, y:wp.y };
+    ev.preventDefault(); render(); return;
+  }
+  if(nEl){
+    var nid = nEl.dataset.id;
+    var n = nodeById(nid);
+    gesture = { type:"node", id:nid, sx:ev.clientX, sy:ev.clientY, ox:n.x, oy:n.y, moved:false, downAt:Date.now() };
+    longTimer = setTimeout(function(){
+      if(gesture && gesture.type==="node" && !gesture.moved){
+        // long-press: toggle merge candidate
+        if(candidates[nid]) delete candidates[nid]; else candidates[nid]=true;
+        gesture.longFired = true;
+        if(navigator.vibrate) navigator.vibrate(15);
+        render();
+      }
+    }, 550);
+    ev.preventDefault(); return;
+  }
+  gesture = { type:"pan", sx:ev.clientX, sy:ev.clientY, vx:view.x, vy:view.y, moved:false, downAt:Date.now(), wp:wp };
+});
+viewport.addEventListener("pointermove", function(ev){
+  if(pointers[ev.pointerId]) pointers[ev.pointerId] = { x:ev.clientX, y:ev.clientY };
+  if(!gesture) return;
+  if(gesture.type==="pinch"){
+    var ps = Object.values(pointers); if(ps.length<2) return;
+    var d = Math.hypot(ps[0].x-ps[1].x, ps[0].y-ps[1].y);
+    var cx = (ps[0].x+ps[1].x)/2, cy = (ps[0].y+ps[1].y)/2;
+    var r = viewport.getBoundingClientRect();
+    var ns = Math.min(3, Math.max(0.15, gesture.scale0 * (d/Math.max(20,gesture.d0))));
+    // keep world point under initial pinch center stable, plus follow center move
+    var wx = (gesture.cx - r.left - gesture.vx)/gesture.scale0, wy = (gesture.cy - r.top - gesture.vy)/gesture.scale0;
+    view.scale = ns;
+    view.x = (cx - r.left) - wx*ns; view.y = (cy - r.top) - wy*ns;
+    applyView(); return;
+  }
+  if(gesture.type==="pan"){
+    var dx = ev.clientX-gesture.sx, dy = ev.clientY-gesture.sy;
+    if(Math.abs(dx)+Math.abs(dy)>6) gesture.moved = true;
+    if(gesture.moved){ view.x = gesture.vx+dx; view.y = gesture.vy+dy; applyView(); }
+    return;
+  }
+  if(gesture.type==="node"){
+    var dxw = (ev.clientX-gesture.sx)/view.scale, dyw = (ev.clientY-gesture.sy)/view.scale;
+    if(Math.abs(ev.clientX-gesture.sx)+Math.abs(ev.clientY-gesture.sy)>7){ gesture.moved = true; clearLong(); }
+    if(gesture.moved && !gesture.longFired){
+      var n = nodeById(gesture.id); if(!n) return;
+      n.x = gesture.ox + dxw; n.y = gesture.oy + dyw;
+      render();
+      var el = nodesEl.querySelector('[data-id="'+gesture.id+'"]'); if(el) el.classList.add("dragging");
+    }
+    return;
+  }
+  if(gesture.type==="port"){
+    gesture.moved = true;
+    var wp = toWorld(ev.clientX, ev.clientY);
+    tempPath = { fromId:gesture.fromId, x:wp.x, y:wp.y };
+    render(); return;
+  }
+});
+function endPointer(ev){
+  delete pointers[ev.pointerId];
+  if(!gesture) return;
+  var g = gesture;
+  if(Object.keys(pointers).length>0 && g.type!=="pinch"){ /* keep gesture */ }
+  if(g.type==="pinch"){ if(Object.keys(pointers).length<2){ gesture=null; save(); } return; }
+  gesture = null; clearLong();
+  var now = Date.now();
+  var wp = toWorld(ev.clientX, ev.clientY);
+
+  if(g.type==="port"){
+    tempPath = null;
+    // dropped on a node?
+    var dropEl = document.elementFromPoint(ev.clientX, ev.clientY);
+    var nEl = null, t = dropEl;
+    while(t && t!==document.body){ if(t.classList && t.classList.contains("node")){ nEl=t; break; } t=t.parentNode; }
+    if(nEl && nEl.dataset.id!==g.fromId){
+      addEdge(g.fromId, nEl.dataset.id); save(); render(); return;
+    }
+    if(!nEl){
+      // create new node connected from port source
+      openSheet({ mode:"new", text:"", kind:"normal", x:wp.x, y:wp.y, connectFrom:[g.fromId] });
+      render(); return;
+    }
+    render(); return;
+  }
+  if(g.type==="node"){
+    var n = nodeById(g.id);
+    if(g.longFired){ render(); return; }
+    if(g.moved){
+      // dropped onto another node -> connect
+      var els = nodesEl.querySelectorAll(".node");
+      var target = null;
+      for(var i=0;i<els.length;i++){
+        var o = nodeById(els[i].dataset.id);
+        if(!o || o.id===g.id) continue;
+        var r = rectOf(o);
+        if(n.x>r.l && n.x<r.r && n.y>r.t && n.y<r.b){ target = o; break; }
+      }
+      if(target){ n.x = g.ox; n.y = g.oy; addEdge(g.id, target.id); }
+      save(); render(); return;
+    }
+    // tap on node
+    var isDouble = (now - lastTap.t < 350) && lastTap.nodeId===g.id;
+    lastTap = { t:now, x:ev.clientX, y:ev.clientY, nodeId:g.id };
+    if(isDouble){ openSheet({ mode:"edit", nodeId:g.id, text:n.text, kind:n.kind }); return; }
+    var candIds = Object.keys(candidates);
+    if(candIds.length>=1 && !candidates[g.id]){
+      // existing memo tapped while merge candidates exist -> it becomes the merge target
+      candIds.forEach(function(fid){ if(fid!==g.id) addEdge(fid, g.id); });
+      candidates = {}; save(); render(); return;
+    }
+    if(selectedId===g.id){ openSheet({ mode:"edit", nodeId:g.id, text:n.text, kind:n.kind }); return; }
+    if(selectedId && selectedId!==g.id){
+      addEdge(selectedId, g.id); selectedId = g.id; save(); render(); return;
+    }
+    selectedId = g.id; render(); return;
+  }
+  if(g.type==="pan"){
+    if(g.moved){ save(); return; }
+    // tap on empty space
+    var candIds2 = Object.keys(candidates);
+    if(candIds2.length>=2){
+      openSheet({ mode:"new", text:"", kind:"merge", x:g.wp.x, y:g.wp.y, mergeFrom:candIds2.slice() });
+      candidates = {}; render(); return;
+    }
+    if(candIds2.length===1){ candidates = {}; render(); return; }
+    var isDouble2 = (now - lastTap.t < 350) && !lastTap.nodeId && Math.hypot(ev.clientX-lastTap.x, ev.clientY-lastTap.y)<34;
+    lastTap = { t:now, x:ev.clientX, y:ev.clientY, nodeId:null };
+    if(isDouble2){ selectedId=null; openSheet({ mode:"new", text:"", kind:"normal", x:g.wp.x, y:g.wp.y }); return; }
+    selectedId = null; render(); return;
+  }
+}
+viewport.addEventListener("pointerup", endPointer);
+viewport.addEventListener("pointercancel", function(ev){ delete pointers[ev.pointerId]; clearLong(); if(gesture && gesture.type==="port"){ tempPath=null; } gesture=null; render(); });
+viewport.addEventListener("wheel", function(ev){
+  ev.preventDefault();
+  var r = viewport.getBoundingClientRect();
+  var mx = ev.clientX-r.left, my = ev.clientY-r.top;
+  var wx = (mx-view.x)/view.scale, wy = (my-view.y)/view.scale;
+  var ns = Math.min(3, Math.max(0.15, view.scale * (ev.deltaY<0 ? 1.12 : 0.89)));
+  view.scale = ns; view.x = mx - wx*ns; view.y = my - wy*ns;
+  applyView();
+}, { passive:false });
+viewport.addEventListener("dblclick", function(ev){ ev.preventDefault(); });
+
+/* ---------- init ---------- */
+render();
+requestAnimationFrame(function(){ render(); fitWorld(); });
+window.addEventListener("resize", function(){ render(); });
+</script>
+</body>
+</html>
