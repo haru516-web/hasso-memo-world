@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>変換候補テスト</title>
+<style>
+body{background:#111;color:#fff;font-family:sans-serif;padding:20px}
+textarea,input{width:100%;font-size:17px;margin:8px 0 24px;padding:10px;box-sizing:border-box}
+label{font-size:14px;color:#ccc}
+</style>
+</head>
+<body>
+<p>変換候補の切り分けテスト用ページです。「たなか」と打って、候補（田中など）が出るか欄ごとに確認してください。</p>
+
+<label>1. 素のtextarea（属性なし・JSなし）</label>
+<textarea rows="3"></textarea>
+
+<label>2. 素のinput（属性なし・JSなし）</label>
+<input type="text">
+
+<label>3. アプリと同じ属性のtextarea（lang=ja / autocorrect=on）</label>
+<textarea rows="3" lang="ja" autocorrect="on" autocapitalize="none" spellcheck="false"></textarea>
+
+</body>
+</html>
