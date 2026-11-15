@@ -127,29 +127,42 @@ svg#edges path.temp{stroke:rgba(255,211,77,.8);stroke-dasharray:6 6}
 "use strict";
 var LS_KEY = "hasso-memo-world-v1";
 var KIND_COLOR = { normal:"#e8e8e8", origin:"#ffd34d", goal:"#54d8ff", merge:"#3ddc84" };
-var SEED = {"worlds":[{"name":"発想","nodes":[{"id":1,"kind":"origin","text":"ドーパミン快感","x":626.448,"y":1219.193},{"id":2,"kind":"origin","text":"物理","x":352.937,"y":1373.678},{"id":3,"kind":"origin","text":"操作感","x":453.983,"y":1285.683},{"id":4,"kind":"origin","text":"平成回帰","x":369.579,"y":1469.760}],"edges":[{"from":2,"to":3},{"from":3,"to":1},{"from":4,"to":2}]}]};
+var SEED = {"worlds":[{"name":"発想","nodes":[{"id":1,"kind":"origin","text":"ドーパミン快感","x":626.448,"y":1219.193},{"id":2,"kind":"origin","text":"物理","x":352.937,"y":1373.678},{"id":3,"kind":"origin","text":"操作感","x":453.983,"y":1285.683},{"id":4,"kind":"origin","text":"平成回帰","x":369.579,"y":1469.760}],"edges":[{"from":2,"to":3},{"from":3,"to":1},{"from":4,"to":2}]},{"name":"オシポンテ","nodes":[{"id":1,"kind":"origin","text":"オシポンテ：住所非公開で、ファンの手紙を推しへ届ける仲介サービス","x":0,"y":0},{"id":2,"kind":"normal","text":"現状の強み：運営が検品して届けるから、推しが安心して受け取れる。SNSで埋もれる想いが、手元に届く手紙になる","x":380,"y":0},{"id":3,"kind":"normal","text":"弱点：事務所に送れる推しには代替品止まり。本当に効くのは、受け取り窓口がない個人勢・クリエイター","x":760,"y":0},{"id":4,"kind":"normal","text":"土台を作る：届く→読まれる→記録に残る→貯まっていく体験にする","x":1140,"y":0},{"id":5,"kind":"normal","text":"決定打の商品を載せる：事務所への郵送では作れない形にする","x":1520,"y":0},{"id":6,"kind":"normal","text":"既読の明確化：QR／ワンタップで「読まれた」が分かる。ありがとうスタンプまで1タップで","x":980,"y":320},{"id":7,"kind":"normal","text":"愛情の数値化：通数・継続月数を可視化。金額だけで競わせない","x":1300,"y":320},{"id":8,"kind":"normal","text":"送付履歴の視覚化：いつ・何の記念日に送ったかが貯まる、思い出のアーカイブにする","x":1620,"y":320},{"id":9,"kind":"normal","text":"返信確定プラン：推しが枠・価格・形式を決める限定プラン。累計額は購入権の条件にする","x":760,"y":600},{"id":10,"kind":"normal","text":"記念日レターブック：ファンみんなの手紙を一冊に束ねて、誕生日・記念日に当日着で届ける","x":1180,"y":-320},{"id":11,"kind":"normal","text":"推しテーマ×読み上げ配信：推しがお題を出す→手紙が集まる→配信で読む。フルはFC、切り抜きはYouTube・インスタへ","x":1500,"y":-320},{"id":12,"kind":"normal","text":"季節の共同作品：七夕は短冊を買って送る→運営が笹に飾り付けて推しへ。量がそのまま絵になる","x":1820,"y":-320},{"id":13,"kind":"normal","text":"交換日記：回数・期間を決めたコース制の往復。完結したノートがファンの手元に残る最上位アイテム","x":2140,"y":-320},{"id":14,"kind":"normal","text":"継続サポーターID：個人情報なしで「今回で○通目」が推しに伝わる表紙シート。推しに覚えられる","x":1940,"y":320},{"id":15,"kind":"merge","text":"循環が生まれる：手紙→配信→切り抜き拡散→新規ファン→次の手紙。推し自身が宣伝する流れ","x":2320,"y":0},{"id":16,"kind":"goal","text":"ゴール：手紙が推しの次の配信になる。お便り番組のフォーマットと運営を担う存在になる","x":2700,"y":0}],"edges":[{"from":1,"to":2},{"from":2,"to":3},{"from":3,"to":4},{"from":4,"to":5},{"from":4,"to":6},{"from":4,"to":7},{"from":4,"to":8},{"from":6,"to":9},{"from":5,"to":10},{"from":5,"to":11},{"from":5,"to":12},{"from":5,"to":13},{"from":5,"to":14},{"from":10,"to":15},{"from":11,"to":15},{"from":12,"to":15},{"from":13,"to":15},{"from":15,"to":16}]}]};
 
 var uidCounter = 1;
 function uid(){ return Date.now().toString(36) + "-" + (uidCounter++).toString(36) + Math.floor(Math.random()*1e6).toString(36); }
 
-function seedState(){
-  var worlds = SEED.worlds.map(function(w){
-    var idMap = {};
-    var nodes = w.nodes.map(function(n){ var nid = uid(); idMap[n.id]=nid; return {id:nid, kind:n.kind, text:n.text, x:n.x, y:n.y, anchor:null}; });
-    var edges = w.edges.map(function(e){
-      var from = nodes.filter(function(n){return n.id===idMap[e.from];})[0];
-      var to = nodes.filter(function(n){return n.id===idMap[e.to];})[0];
-      var ed = {id:uid(), from:from.id, to:to.id, anchor:null};
-      return ed;
-    });
-    return {id:uid(), name:w.name, nodes:nodes, edges:edges};
+function buildWorld(w){
+  var idMap = {};
+  var nodes = w.nodes.map(function(n){ var nid = uid(); idMap[n.id]=nid; return {id:nid, kind:n.kind, text:n.text, x:n.x, y:n.y, anchor:null}; });
+  var edges = w.edges.map(function(e){
+    var from = nodes.filter(function(n){return n.id===idMap[e.from];})[0];
+    var to = nodes.filter(function(n){return n.id===idMap[e.to];})[0];
+    var ed = {id:uid(), from:from.id, to:to.id, anchor:null};
+    return ed;
   });
-  return { worlds:worlds, currentId:worlds[0].id, seeded:true };
+  return {id:uid(), name:w.name, nodes:nodes, edges:edges};
+}
+function seedState(){
+  var worlds = SEED.worlds.map(buildWorld);
+  return { worlds:worlds, currentId:worlds[0].id, seeded:true, oshaponteV1:true };
 }
 function load(){
   try{
     var raw = localStorage.getItem(LS_KEY);
-    if(raw){ var s = JSON.parse(raw); if(s && s.worlds && s.worlds.length) return s; }
+    if(raw){ var s = JSON.parse(raw); if(s && s.worlds && s.worlds.length){
+      if(!s.oshaponteV1){
+        var exists = s.worlds.some(function(w){ return w.name === "オシポンテ"; });
+        if(!exists){
+          var seedWorld = null;
+          SEED.worlds.forEach(function(w){ if(w.name === "オシポンテ") seedWorld = w; });
+          if(seedWorld) s.worlds.push(buildWorld(seedWorld));
+        }
+        s.oshaponteV1 = true;
+        try{ localStorage.setItem(LS_KEY, JSON.stringify(s)); }catch(e){}
+      }
+      return s;
+    } }
   }catch(e){}
   var s2 = seedState(); save(s2); return s2;
 }
