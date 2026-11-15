@@ -49,9 +49,10 @@ svg#edges path.temp{stroke:rgba(255,211,77,.8);stroke-dasharray:6 6}
 #mergeBar{position:absolute;top:calc(env(safe-area-inset-top,0px) + 56px);left:50%;transform:translateX(-50%);z-index:21;background:rgba(20,40,28,.9);border:1px solid #3ddc84;color:#c9ffe0;border-radius:999px;padding:6px 14px;font-size:13px;display:none}
 #sheetWrap{position:fixed;inset:0;z-index:50;display:none}
 #sheetBg{position:absolute;inset:0;background:rgba(0,0,0,.45)}
-#sheet{position:absolute;left:0;right:0;bottom:0;background:#14151d;border-radius:20px 20px 0 0;padding:8px 18px calc(env(safe-area-inset-bottom,0px) + 18px);touch-action:none;box-shadow:0 -6px 30px rgba(0,0,0,.7)}
-#handle{width:44px;height:5px;border-radius:3px;background:rgba(255,255,255,.35);margin:2px auto 12px}
-#sheetText{width:100%;min-height:74px;max-height:32vh;background:transparent;border:none;outline:none;color:#fff;font-size:17px;line-height:1.5;resize:none;font-family:inherit}
+#sheet{position:absolute;left:0;right:0;bottom:0;background:#14151d;border-radius:20px 20px 0 0;padding:8px 18px calc(env(safe-area-inset-bottom,0px) + 18px);box-shadow:0 -6px 30px rgba(0,0,0,.7)}
+#handle{width:44px;height:22px;border-radius:3px;margin:0 auto 4px;touch-action:none;position:relative}
+#handle::after{content:"";position:absolute;left:50%;top:8px;width:44px;height:5px;border-radius:3px;background:rgba(255,255,255,.35);transform:translateX(-50%)}
+#sheetText{width:100%;min-height:74px;max-height:32vh;background:transparent;border:none;outline:none;color:#fff;font-size:17px;line-height:1.5;resize:none;font-family:inherit;touch-action:auto;-webkit-user-select:text;user-select:text}
 #colorRow{display:flex;gap:16px;align-items:center;margin-top:8px}
 .cdot{width:30px;height:30px;border-radius:50%;border:2.5px solid #e8e8e8;background:transparent;padding:0;cursor:pointer}
 .cdot[data-kind="origin"]{border-color:#ffd34d;background:rgba(255,211,77,.25)}
@@ -95,7 +96,7 @@ svg#edges path.temp{stroke:rgba(255,211,77,.8);stroke-dasharray:6 6}
   <div id="sheet">
     <div id="handle"></div>
     <div id="sheetImgWrap"><img id="sheetImgPreview" alt=""><button id="sheetImgDel" title="画像を外す">✕</button></div>
-    <textarea id="sheetText" placeholder="メモ"></textarea>
+    <textarea id="sheetText" placeholder="メモ" lang="ja" autocorrect="on" autocapitalize="none" spellcheck="false"></textarea>
     <div id="colorRow">
       <button class="cdot" data-kind="normal" aria-label="通常"></button>
       <button class="cdot" data-kind="origin" aria-label="起点"></button>
@@ -379,6 +380,14 @@ var sheetWrap = document.getElementById("sheetWrap");
 var sheetEl = document.getElementById("sheet");
 var sheetText = document.getElementById("sheetText");
 var delBtn = document.getElementById("delBtn");
+/* IME safety: keep the textarea a completely native input.
+   - track composition so nothing interferes mid-conversion
+   - pointer events on the textarea never reach the sheet's swipe handlers */
+var imeComposing = false;
+sheetText.addEventListener("compositionstart", function(){ imeComposing = true; });
+sheetText.addEventListener("compositionend", function(){ imeComposing = false; });
+sheetText.addEventListener("pointerdown", function(ev){ ev.stopPropagation(); });
+sheetText.addEventListener("touchstart", function(ev){ ev.stopPropagation(); }, { passive:true });
 var sheetCtx = null; // {mode:'new'|'edit', nodeId, x, y, kind, img, connectFrom:[], mergeFrom:[]}
 var sheetImgWrap = document.getElementById("sheetImgWrap");
 var sheetImgPreview = document.getElementById("sheetImgPreview");
@@ -388,6 +397,9 @@ function updateSheetImg(){
 }
 function openSheet(ctx){
   sheetCtx = ctx;
+  // sheetText.value is assigned ONLY here, when the sheet opens. It is never
+  // written back while the user is typing, so an active IME composition in
+  // the textarea cannot be reset by the app. Keep it that way.
   sheetText.value = ctx.text || "";
   delBtn.style.display = ctx.mode==="edit" ? "block" : "none";
   updateColorRow(ctx.kind || "normal");
@@ -464,7 +476,12 @@ document.getElementById("sheetBg").addEventListener("click", function(){ closeSh
 (function(){
   var sy=null, dy=0, st=0;
   sheetEl.addEventListener("pointerdown", function(ev){
-    if(ev.target===sheetText) return;
+    // swipe-down starts only from the sheet's own chrome (handle / padding).
+    // Never hijack touches on the textarea or any interactive child: on iOS
+    // the old sheet-wide setPointerCapture + touch-action:none around the
+    // input could disturb the native IME candidate UI.
+    if(imeComposing) return;
+    if(ev.target!==sheetEl && ev.target!==document.getElementById("handle")) return;
     sy = ev.clientY; dy = 0; st = Date.now();
     sheetEl.style.transition = "none";
     sheetEl.setPointerCapture(ev.pointerId);
@@ -773,7 +790,15 @@ viewport.addEventListener("dblclick", function(ev){ ev.preventDefault(); });
 /* ---------- init ---------- */
 render();
 requestAnimationFrame(function(){ render(); fitWorld(); });
-window.addEventListener("resize", function(){ render(); });
+window.addEventListener("resize", function(){
+  // iOS fires resize when the keyboard / IME candidate bar opens or changes
+  // height. Rebuilding the whole canvas DOM at that moment risks disturbing
+  // an in-progress composition, and is pointless while the sheet covers the
+  // canvas (closeSheet renders anyway).
+  if(imeComposing) return;
+  if(sheetWrap.style.display==="block") return;
+  render();
+});
 </script>
 </body>
 </html>
