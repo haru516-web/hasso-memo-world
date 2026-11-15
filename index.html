@@ -70,6 +70,10 @@ svg#edges path.temp{stroke:rgba(255,211,77,.8);stroke-dasharray:6 6}
 .wrow .cnt{margin-left:auto;color:rgba(255,255,255,.45);font-size:13px}
 .wrow .wact{background:none;border:none;color:rgba(255,255,255,.55);font-size:16px;padding:4px}
 #newWorld{width:100%;margin-top:14px;background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:12px;font-size:15px}
+#viewer{position:fixed;inset:0;z-index:70;background:#000;display:none;touch-action:none;overflow:hidden}
+#viewerImg{position:absolute;left:50%;top:50%;max-width:100vw;max-height:100vh;object-fit:contain;transform:translate(-50%,-50%);user-select:none;-webkit-user-select:none;pointer-events:none}
+#viewerEdit{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 26px);transform:translateX(-50%);background:rgba(24,24,32,.85);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:11px 26px;font-size:15.5px;backdrop-filter:blur(6px);cursor:pointer;z-index:2}
+#viewerCap{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 84px);text-align:center;font-size:14px;color:rgba(255,255,255,.85);padding:0 24px;pointer-events:none;text-shadow:0 1px 8px #000}
 </style>
 </head>
 <body>
@@ -102,6 +106,12 @@ svg#edges path.temp{stroke:rgba(255,211,77,.8);stroke-dasharray:6 6}
     </div>
     <input type="file" id="photoInput" accept="image/*" style="display:none">
   </div>
+</div>
+
+<div id="viewer">
+  <img id="viewerImg" alt="">
+  <div id="viewerCap"></div>
+  <button id="viewerEdit">編集</button>
 </div>
 
 <div id="worldSheet">
@@ -475,6 +485,86 @@ document.getElementById("sheetBg").addEventListener("click", function(){ closeSh
   sheetEl.addEventListener("pointercancel", function(){ sy=null; sheetEl.style.transform="translateY(0)"; });
 })();
 
+/* ---------- image viewer ---------- */
+var viewerEl = document.getElementById("viewer");
+var viewerImg = document.getElementById("viewerImg");
+var viewerCap = document.getElementById("viewerCap");
+var viewerEditBtn = document.getElementById("viewerEdit");
+var viewerNodeId = null;
+var vScale = 1, vX = 0, vY = 0;
+function applyViewerTransform(){
+  viewerImg.style.transform = "translate(calc(-50% + "+vX+"px), calc(-50% + "+vY+"px)) scale("+vScale+")";
+}
+function openViewer(nodeId){
+  var n = nodeById(nodeId);
+  if(!n || !n.img) return;
+  viewerNodeId = nodeId;
+  vScale = 1; vX = 0; vY = 0;
+  viewerImg.src = n.img;
+  viewerCap.textContent = n.text || "";
+  viewerCap.style.display = n.text ? "block" : "none";
+  applyViewerTransform();
+  viewerEl.style.display = "block";
+}
+function closeViewer(){
+  viewerNodeId = null;
+  viewerEl.style.display = "none";
+  viewerImg.removeAttribute("src");
+}
+viewerEditBtn.addEventListener("click", function(ev){
+  ev.stopPropagation();
+  var id = viewerNodeId;
+  var n = id ? nodeById(id) : null;
+  closeViewer();
+  if(n) openSheet({ mode:"edit", nodeId:n.id, text:n.text, kind:n.kind, img:n.img, hadImg:!!n.img });
+});
+(function(){
+  var ptrs = {}, pinch = null, drag = null, downInfo = null;
+  viewerEl.addEventListener("pointerdown", function(ev){
+    if(ev.target===viewerEditBtn) return;
+    ptrs[ev.pointerId] = { x:ev.clientX, y:ev.clientY };
+    if(Object.keys(ptrs).length===2){
+      var ps = Object.values(ptrs);
+      pinch = { d0:Math.hypot(ps[0].x-ps[1].x, ps[0].y-ps[1].y), s0:vScale };
+      drag = null; downInfo = null;
+      return;
+    }
+    drag = { sx:ev.clientX, sy:ev.clientY, vx:vX, vy:vY, moved:false };
+    downInfo = { y:ev.clientY, t:Date.now() };
+  });
+  viewerEl.addEventListener("pointermove", function(ev){
+    if(ptrs[ev.pointerId]) ptrs[ev.pointerId] = { x:ev.clientX, y:ev.clientY };
+    if(pinch){
+      var ps = Object.values(ptrs); if(ps.length<2) return;
+      var d = Math.hypot(ps[0].x-ps[1].x, ps[0].y-ps[1].y);
+      vScale = Math.min(5, Math.max(1, pinch.s0 * (d/Math.max(20,pinch.d0))));
+      if(vScale===1){ vX = 0; vY = 0; }
+      applyViewerTransform(); return;
+    }
+    if(drag){
+      var dx = ev.clientX-drag.sx, dy = ev.clientY-drag.sy;
+      if(Math.abs(dx)+Math.abs(dy)>6) drag.moved = true;
+      if(drag.moved && vScale>1){ vX = drag.vx+dx; vY = drag.vy+dy; applyViewerTransform(); }
+    }
+  });
+  function vEnd(ev){
+    var wasPinch = !!pinch;
+    delete ptrs[ev.pointerId];
+    if(pinch && Object.keys(ptrs).length<2) pinch = null;
+    if(wasPinch){ drag = null; downInfo = null; return; }
+    if(!drag) return;
+    var d = drag, di = downInfo; drag = null; downInfo = null;
+    if(vScale>1) return;
+    var dy = ev.clientY - d.sy;
+    // swipe down to close
+    if(dy>70){ closeViewer(); return; }
+    // plain tap on background/image (not a drag) closes
+    if(!d.moved && di && Date.now()-di.t<400){ closeViewer(); }
+  }
+  viewerEl.addEventListener("pointerup", vEnd);
+  viewerEl.addEventListener("pointercancel", function(ev){ delete ptrs[ev.pointerId]; pinch=null; drag=null; downInfo=null; });
+})();
+
 /* ---------- world sheet ---------- */
 var worldSheet = document.getElementById("worldSheet");
 function openWorlds(){
@@ -640,10 +730,16 @@ function endPointer(ev){
       candIds.forEach(function(fid){ if(fid!==g.id) addEdge(fid, g.id); });
       candidates = {}; save(); render(); return;
     }
-    if(selectedId===g.id){ openSheet({ mode:"edit", nodeId:g.id, text:n.text, kind:n.kind, img:n.img, hadImg:!!n.img }); return; }
     if(selectedId && selectedId!==g.id){
       addEdge(selectedId, g.id); selectedId = g.id; save(); render(); return;
     }
+    if(n.img && candIds.length===0){
+      // normal tap on an image memo: open the full-image viewer instead of the editor.
+      // (connection contexts above take priority; the node stays selected so its
+      //  port / tap-to-tap flow still works after the viewer is closed)
+      selectedId = g.id; render(); openViewer(g.id); return;
+    }
+    if(selectedId===g.id){ openSheet({ mode:"edit", nodeId:g.id, text:n.text, kind:n.kind, img:n.img, hadImg:!!n.img }); return; }
     selectedId = g.id; render(); return;
   }
   if(g.type==="pan"){
