@@ -62,23 +62,11 @@ svg#edges circle.edge-end{pointer-events:all;cursor:pointer}
 #topbar{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:12px;z-index:20}
 #worldBtn{background:rgba(18,19,28,.78);color:#fff;border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:9px 17px;font-size:15px;font-weight:600;letter-spacing:.02em;backdrop-filter:blur(10px);box-shadow:0 4px 18px rgba(0,0,0,.45)}
 #worldBtn .wcount{color:rgba(255,255,255,.5);font-weight:400;font-size:13px;margin-left:6px}
-#hint{position:absolute;left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);text-align:center;font-size:11.5px;color:rgba(255,255,255,.55);z-index:20;pointer-events:none;text-shadow:0 1px 6px #000}
 #mergeBar{position:absolute;top:calc(env(safe-area-inset-top,0px) + 56px);left:50%;transform:translateX(-50%);z-index:21;background:rgba(20,40,28,.92);border:1px solid #3ddc84;color:#c9ffe0;border-radius:999px;padding:7px 15px;font-size:13px;display:none;white-space:nowrap;max-width:94vw;overflow:hidden;text-overflow:ellipsis}
 #edgeBar{position:absolute;top:calc(env(safe-area-inset-top,0px) + 56px);left:50%;transform:translateX(-50%);z-index:21;background:rgba(22,23,33,.92);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:999px;padding:6px 8px 6px 15px;font-size:12.5px;display:none;align-items:center;gap:10px;max-width:94vw;backdrop-filter:blur(8px);box-shadow:0 6px 22px rgba(0,0,0,.5)}
 #edgeBarText{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #edgeBarText .arr{color:rgba(255,255,255,.55);margin:0 5px}
 #edgeDelBtn{background:rgba(255,90,90,.16);border:1px solid rgba(255,120,120,.55);color:#ffb3b3;border-radius:999px;padding:5px 12px;font-size:12.5px;cursor:pointer;white-space:nowrap}
-#toolBar{position:absolute;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 44px);z-index:20;display:flex;flex-direction:column;gap:10px}
-.toolBtn{width:46px;height:46px;border-radius:50%;border:1px solid rgba(255,255,255,.28);background:rgba(18,19,28,.78);color:#fff;font-size:20px;line-height:1;cursor:pointer;backdrop-filter:blur(10px);box-shadow:0 4px 18px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:0}
-.toolBtn:active{transform:scale(.93)}
-#jumpSheet{position:fixed;inset:0;z-index:60;display:none}
-#jumpSheetBg{position:absolute;inset:0;background:rgba(0,0,0,.5)}
-#jumpPanel{position:absolute;left:0;right:0;bottom:0;background:#14151d;border-radius:20px 20px 0 0;padding:10px 18px calc(env(safe-area-inset-bottom,0px) + 20px);max-height:72vh;overflow:auto}
-#jumpSearch{width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);border-radius:12px;color:#fff;font-size:16px;padding:11px 13px;outline:none;margin:6px 0 4px;font-family:inherit}
-.jrow{display:flex;align-items:center;gap:11px;padding:12px 4px;border-bottom:1px solid rgba(255,255,255,.08);font-size:14.5px;cursor:pointer}
-.jrow .jdot{flex:none;width:13px;height:13px;border-radius:50%;border:2.5px solid #e8e8e8}
-.jrow .jtext{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.jrow .jcnt{margin-left:auto;flex:none;color:rgba(255,255,255,.45);font-size:12.5px}
 #sheetWrap{position:fixed;inset:0;z-index:50;display:none}
 #sheetBg{position:absolute;inset:0;background:rgba(0,0,0,.45)}
 #sheet{position:absolute;left:0;right:0;bottom:0;background:#14151d;border-radius:20px 20px 0 0;padding:8px 18px calc(env(safe-area-inset-bottom,0px) + 18px);box-shadow:0 -6px 30px rgba(0,0,0,.7)}
@@ -121,19 +109,6 @@ svg#edges circle.edge-end{pointer-events:all;cursor:pointer}
   <div id="topbar"><button id="worldBtn"></button></div>
   <div id="mergeBar"></div>
   <div id="edgeBar"><span id="edgeBarText"></span><button id="edgeDelBtn">線を削除</button></div>
-  <div id="toolBar">
-    <button class="toolBtn" id="jumpBtn" title="メモを探して移動" aria-label="メモを探して移動">🔍</button>
-    <button class="toolBtn" id="fitBtn" title="全体を表示" aria-label="全体を表示">⤢</button>
-  </div>
-  <div id="hint">ダブルタップでメモ追加</div>
-</div>
-
-<div id="jumpSheet">
-  <div id="jumpSheetBg"></div>
-  <div id="jumpPanel">
-    <input id="jumpSearch" type="search" placeholder="メモを探す" lang="ja" autocorrect="on" autocapitalize="none">
-    <div id="jumpList"></div>
-  </div>
 </div>
 
 <div id="sheetWrap">
@@ -427,12 +402,10 @@ function render(){
   if(ccount>0){ mergeBar.style.display="block"; mergeBar.textContent = "統合："+ccount+"件 選択中（空き場所タップで統合先を作成）"; }
   else mergeBar.style.display="none";
   updateEdgeBar(w);
-  updateHint(w);
   applyView();
 }
 var edgeBar = document.getElementById("edgeBar");
 var edgeBarText = document.getElementById("edgeBarText");
-var hintEl = document.getElementById("hint");
 function updateEdgeBar(w){
   if(!selectedEdgeId){ edgeBar.style.display = "none"; return; }
   var e = null;
@@ -445,20 +418,6 @@ function updateEdgeBar(w){
   var s2 = document.createElement("span"); s2.textContent = snippet(b ? b.text : "", 14);
   edgeBarText.appendChild(s1); edgeBarText.appendChild(ar); edgeBarText.appendChild(s2);
   edgeBar.style.display = "flex";
-}
-function updateHint(w){
-  if(selectedEdgeId){ hintEl.textContent = "線を選択中です"; return; }
-  if(selectedId){
-    var n = nodeById(selectedId);
-    if(n){
-      var cnt = 0;
-      w.edges.forEach(function(x){ if(x.from===selectedId || x.to===selectedId) cnt++; });
-      hintEl.textContent = "「"+snippet(n.text, 12)+"」・線 "+cnt+" 本 — 黄色の丸を引く／別のメモをタップで接続、ダブルタップで編集";
-      return;
-    }
-  }
-  if(Object.keys(candidates).length>0){ hintEl.textContent = "統合するメモを選択中 — 空き場所タップで統合メモを作成"; return; }
-  hintEl.textContent = "ダブルタップでメモ追加 ・ メモをタップすると、その線だけが光ります";
 }
 document.getElementById("edgeDelBtn").addEventListener("click", function(){
   if(!selectedEdgeId) return;
@@ -961,61 +920,6 @@ viewport.addEventListener("wheel", function(ev){
 }, { passive:false });
 viewport.addEventListener("dblclick", function(ev){ ev.preventDefault(); });
 
-/* ---------- toolbar: fit & jump-to-memo ---------- */
-document.getElementById("fitBtn").addEventListener("click", function(){
-  selectedEdgeId = null; fitWorld();
-});
-var jumpSheet = document.getElementById("jumpSheet");
-var jumpList = document.getElementById("jumpList");
-var jumpSearch = document.getElementById("jumpSearch");
-function edgeCountOf(id){
-  var c = 0, w = cur();
-  w.edges.forEach(function(x){ if(x.from===id || x.to===id) c++; });
-  return c;
-}
-function buildJumpList(filter){
-  var w = cur(); if(!w) return;
-  jumpList.innerHTML = "";
-  var f = (filter || "").trim();
-  var shown = 0;
-  w.nodes.forEach(function(n){
-    if(f && (n.text || "").indexOf(f) < 0) return;
-    shown++;
-    var row = document.createElement("div"); row.className = "jrow";
-    var dot = document.createElement("span"); dot.className = "jdot"; dot.style.borderColor = KIND_COLOR[n.kind];
-    if(n.kind!=="normal") dot.style.background = KIND_COLOR[n.kind] + "44";
-    var tx = document.createElement("span"); tx.className = "jtext"; tx.textContent = snippet(n.text, 42);
-    var cnt = document.createElement("span"); cnt.className = "jcnt"; cnt.textContent = "線 " + edgeCountOf(n.id) + "本";
-    row.appendChild(dot); row.appendChild(tx); row.appendChild(cnt);
-    row.addEventListener("click", function(){
-      jumpSheet.style.display = "none";
-      jumpToNode(n.id);
-    });
-    jumpList.appendChild(row);
-  });
-  if(!shown){
-    var empty = document.createElement("div");
-    empty.className = "jrow"; empty.textContent = "見つかりませんでした";
-    jumpList.appendChild(empty);
-  }
-}
-function jumpToNode(id){
-  var n = nodeById(id); if(!n) return;
-  selectedId = id; selectedEdgeId = null;
-  var vw = viewport.clientWidth, vh = viewport.clientHeight;
-  view.scale = Math.min(1.15, Math.max(view.scale, 0.85));
-  view.x = vw/2 - n.x*view.scale;
-  view.y = vh/2 - n.y*view.scale;
-  render();
-}
-document.getElementById("jumpBtn").addEventListener("click", function(){
-  jumpSearch.value = "";
-  buildJumpList("");
-  jumpSheet.style.display = "block";
-});
-jumpSearch.addEventListener("input", function(){ buildJumpList(jumpSearch.value); });
-jumpSearch.addEventListener("pointerdown", function(ev){ ev.stopPropagation(); });
-document.getElementById("jumpSheetBg").addEventListener("click", function(){ jumpSheet.style.display = "none"; });
 
 /* ---------- init ---------- */
 render();
