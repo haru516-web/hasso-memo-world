@@ -62,7 +62,9 @@ svg#edges path.flow.active{stroke:rgba(255,255,255,.92);stroke-width:3.6;animati
 .node.dragging{cursor:grabbing;opacity:.92;z-index:5}
 .port{position:absolute;right:-9px;top:50%;width:18px;height:18px;margin-top:-9px;border-radius:50%;background:#ffd34d;box-shadow:0 0 12px 3px rgba(255,211,77,.75);display:none;touch-action:none;cursor:crosshair;z-index:6}
 .node.selected .port{display:block}
-#topbar{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:12px;z-index:20}
+#topbar{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:12px;z-index:20;display:flex;gap:8px;align-items:center}
+#tidyBtn,#undoBtn{background:rgba(18,19,28,.78);color:#fff;border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:9px 14px;font-size:13.5px;font-weight:600;backdrop-filter:blur(10px);box-shadow:0 4px 18px rgba(0,0,0,.45);cursor:pointer}
+#undoBtn{border-color:rgba(255,211,77,.55);color:#ffd34d}
 #worldBtn{background:rgba(18,19,28,.78);color:#fff;border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:9px 17px;font-size:15px;font-weight:600;letter-spacing:.02em;backdrop-filter:blur(10px);box-shadow:0 4px 18px rgba(0,0,0,.45)}
 #worldBtn .wcount{color:rgba(255,255,255,.5);font-weight:400;font-size:13px;margin-left:6px}
 #mergeBar{position:absolute;top:calc(env(safe-area-inset-top,0px) + 56px);left:50%;transform:translateX(-50%);z-index:21;background:rgba(20,40,28,.92);border:1px solid #3ddc84;color:#c9ffe0;border-radius:999px;padding:7px 15px;font-size:13px;display:none;white-space:nowrap;max-width:94vw;overflow:hidden;text-overflow:ellipsis}
@@ -113,7 +115,7 @@ svg#edges path.flow.active{stroke:rgba(255,255,255,.92);stroke-width:3.6;animati
       <div id="nodes"></div>
     </div>
   </div>
-  <div id="topbar"><button id="worldBtn"></button></div>
+  <div id="topbar"><button id="worldBtn"></button><button id="tidyBtn">整理</button><button id="undoBtn" style="display:none">元に戻す</button></div>
   <div id="mergeBar"></div>
   <div id="edgeBar"><span id="edgeBarText"></span><button id="edgeDelBtn">線を削除</button></div>
 </div>
@@ -314,6 +316,8 @@ var nodesEl = document.getElementById("nodes");
 var edgesEl = document.getElementById("edges");
 var starsEl = document.getElementById("stars");
 var worldBtn = document.getElementById("worldBtn");
+var tidyBtn = document.getElementById("tidyBtn");
+var undoBtn = document.getElementById("undoBtn");
 var mergeBar = document.getElementById("mergeBar");
 
 function applyView(){
@@ -331,6 +335,7 @@ function render(){
   var wn = document.createElement("span"); wn.textContent = w.name + " ▾";
   var wc = document.createElement("span"); wc.className = "wcount"; wc.textContent = w.nodes.length + "件";
   worldBtn.appendChild(wn); worldBtn.appendChild(wc);
+  refreshUndoBtn();
   // focus state: selected node -> only its lines & neighbours stay bright;
   // selected edge -> only that line and its two memos stay bright.
   var focusNodes = null, focusEdges = null;
@@ -451,6 +456,54 @@ function fitWorld(){
   view.y = vh/2 - (minY+maxY)/2*sc;
   render();
 }
+
+/* ---------- tidy (de-overlap, layout-preserving) ---------- */
+var LS_UNDO = LS_KEY + ":undo";
+function loadUndo(){ try{ return JSON.parse(localStorage.getItem(LS_UNDO) || "null"); }catch(e){ return null; } }
+function refreshUndoBtn(){
+  if(!undoBtn) return;
+  var u = loadUndo(), w = cur();
+  undoBtn.style.display = (u && w && u.worldId === w.id) ? "" : "none";
+}
+function tidyLayout(){
+  var w = cur(); if(!w || w.nodes.length < 2) return;
+  var pos = {};
+  w.nodes.forEach(function(n){ pos[n.id] = { x:n.x, y:n.y }; });
+  try{ localStorage.setItem(LS_UNDO, JSON.stringify({ worldId:w.id, pos:pos })); }catch(e){}
+  var PAD = 26, ns = w.nodes;
+  for(var iter = 0; iter < 240; iter++){
+    var moved = false;
+    for(var i = 0; i < ns.length; i++){
+      for(var j = i + 1; j < ns.length; j++){
+        var a = ns[i], b = ns[j], sa = sizeOf(a), sb = sizeOf(b);
+        var dx = b.x - a.x, dy = b.y - a.y;
+        var ox = (sa.w + sb.w) / 2 + PAD - Math.abs(dx);
+        var oy = (sa.h + sb.h) / 2 + PAD - Math.abs(dy);
+        if(ox > 0 && oy > 0){
+          moved = true;
+          if(ox < oy){ var px = ox / 2 + 0.5, sx = dx >= 0 ? 1 : -1; a.x -= px * sx; b.x += px * sx; }
+          else { var py = oy / 2 + 0.5, sy = dy >= 0 ? 1 : -1; a.y -= py * sy; b.y += py * sy; }
+        }
+      }
+    }
+    if(!moved) break;
+  }
+  selectedId = null; selectedEdgeId = null;
+  saveOrWarn();
+  fitWorld();
+  refreshUndoBtn();
+}
+function undoTidy(){
+  var u = loadUndo(), w = cur();
+  if(!u || !w || u.worldId !== w.id) return;
+  w.nodes.forEach(function(n){ var p = u.pos[n.id]; if(p){ n.x = p.x; n.y = p.y; } });
+  try{ localStorage.removeItem(LS_UNDO); }catch(e){}
+  saveOrWarn();
+  fitWorld();
+  refreshUndoBtn();
+}
+tidyBtn.addEventListener("click", tidyLayout);
+undoBtn.addEventListener("click", undoTidy);
 
 /* ---------- mutations ---------- */
 function addEdge(fromId, toId){
