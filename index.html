@@ -506,13 +506,7 @@ function reanchor(w){
     list.forEach(function(it){ it.e.anchor = anchorFromT(it.t); });
   });
 }
-function tidyLayout(){
-  var w = cur(); if(!w || w.nodes.length < 2) return;
-  var pos = {};
-  w.nodes.forEach(function(n){ pos[n.id] = { x:n.x, y:n.y }; });
-  var anchors = {};
-  w.edges.forEach(function(e){ anchors[e.id] = e.anchor ? { dx:e.anchor.dx, dy:e.anchor.dy } : null; });
-  try{ localStorage.setItem(LS_UNDO, JSON.stringify({ worldId:w.id, pos:pos, anchors:anchors })); }catch(e){}
+function deoverlapNodes(w){
   var PAD = 26, ns = w.nodes;
   for(var iter = 0; iter < 240; iter++){
     var moved = false;
@@ -531,6 +525,103 @@ function tidyLayout(){
     }
     if(!moved) break;
   }
+}
+function edgeSamplePts(e){
+  // Sampled points along an edge's curve, mirroring edgeGeom's control
+  // points but without the obstacle push, so crossing counts stay stable
+  // while positions are being tried out.
+  var a = nodeById(e.from), b = nodeById(e.to);
+  if(!a || !b) return null;
+  var anc = e.anchor || makeAnchor(a, borderPoint(a, b.x, b.y));
+  var start = anchorPoint(a, anc);
+  var end = borderPoint(b, start.x, start.y);
+  var dist = Math.hypot(end.x - start.x, end.y - start.y) || 1;
+  var reach = Math.min(150, Math.max(38, dist * 0.36));
+  var sn = sideNormal(a, start), en = sideNormal(b, end);
+  var c1 = { x:start.x + sn.x * reach, y:start.y + sn.y * reach };
+  var c2 = { x:end.x + en.x * reach, y:end.y + en.y * reach };
+  var pts = [];
+  for(var i = 0; i <= 12; i++) pts.push(cubicPt(start, c1, c2, end, i / 12));
+  return pts;
+}
+function ptsBox(p){
+  var b = { l:1e18, r:-1e18, t:1e18, b:-1e18 };
+  p.forEach(function(q){ b.l = Math.min(b.l, q.x); b.r = Math.max(b.r, q.x); b.t = Math.min(b.t, q.y); b.b = Math.max(b.b, q.y); });
+  return b;
+}
+function segCross(p1, p2, p3, p4){
+  function d(ax, ay, bx, by){ return ax * by - ay * bx; }
+  var rx = p2.x - p1.x, ry = p2.y - p1.y, sx = p4.x - p3.x, sy = p4.y - p3.y;
+  var den = d(rx, ry, sx, sy);
+  if(Math.abs(den) < 1e-9) return false;
+  var qx = p3.x - p1.x, qy = p3.y - p1.y;
+  var t = d(qx, qy, sx, sy) / den, u = d(qx, qy, rx, ry) / den;
+  return t > 0.02 && t < 0.98 && u > 0.02 && u < 0.98;
+}
+function countCrossings(w){
+  var samples = {};
+  w.edges.forEach(function(e){ samples[e.id] = edgeSamplePts(e); });
+  var n = 0;
+  for(var i = 0; i < w.edges.length; i++){
+    for(var j = i + 1; j < w.edges.length; j++){
+      var e1 = w.edges[i], e2 = w.edges[j];
+      if(e1.from === e2.from || e1.from === e2.to || e1.to === e2.from || e1.to === e2.to) continue;
+      var p1 = samples[e1.id], p2 = samples[e2.id];
+      if(!p1 || !p2) continue;
+      var b1 = ptsBox(p1), b2 = ptsBox(p2);
+      if(b1.r < b2.l || b2.r < b1.l || b1.b < b2.t || b2.b < b1.t) continue;
+      var hit = false;
+      for(var a = 0; a < p1.length - 1 && !hit; a++)
+        for(var b = 0; b < p2.length - 1 && !hit; b++)
+          if(segCross(p1[a], p1[a + 1], p2[b], p2[b + 1])) hit = true;
+      if(hit) n++;
+    }
+  }
+  return n;
+}
+function reduceCrossings(w){
+  // Swap the positions of two memos only when it strictly reduces the
+  // number of line crossings. The set of occupied positions is unchanged
+  // (the two memos trade places), so the overall layout outline is kept;
+  // anchors are re-derived after each trial swap so exits face targets.
+  var best = countCrossings(w);
+  if(best === 0) return 0;
+  var startBest = best;
+  for(var pass = 0; pass < 12 && best > 0; pass++){
+    var improved = false;
+    for(var i = 0; i < w.nodes.length; i++){
+      for(var j = i + 1; j < w.nodes.length; j++){
+        var a = w.nodes[i], b = w.nodes[j];
+        var ax = a.x, ay = a.y, bx = b.x, by = b.y;
+        var savedAnchors = {};
+        w.edges.forEach(function(e){ savedAnchors[e.id] = e.anchor; });
+        a.x = bx; a.y = by; b.x = ax; b.y = ay;
+        reanchor(w);
+        var c = countCrossings(w);
+        if(c < best){ best = c; improved = true; }
+        else {
+          a.x = ax; a.y = ay; b.x = bx; b.y = by;
+          w.edges.forEach(function(e){ e.anchor = savedAnchors[e.id]; });
+        }
+      }
+    }
+    if(!improved) break;
+  }
+  return startBest - best;
+}
+function tidyLayout(){
+  var w = cur(); if(!w || w.nodes.length < 2) return;
+  var pos = {};
+  w.nodes.forEach(function(n){ pos[n.id] = { x:n.x, y:n.y }; });
+  var anchors = {};
+  w.edges.forEach(function(e){ anchors[e.id] = e.anchor ? { dx:e.anchor.dx, dy:e.anchor.dy } : null; });
+  try{ localStorage.setItem(LS_UNDO, JSON.stringify({ worldId:w.id, pos:pos, anchors:anchors })); }catch(e){}
+  deoverlapNodes(w);
+  reanchor(w);
+  reduceCrossings(w);
+  // A swap can leave two cards touching again; push those apart and
+  // re-derive exits once more. This moves nodes only minimally.
+  deoverlapNodes(w);
   reanchor(w);
   selectedId = null; selectedEdgeId = null;
   saveOrWarn();
