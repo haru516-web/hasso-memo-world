@@ -465,11 +465,54 @@ function refreshUndoBtn(){
   var u = loadUndo(), w = cur();
   undoBtn.style.display = (u && w && u.worldId === w.id) ? "" : "none";
 }
+function anchorT(a){
+  // perimeter position of an anchor, 0..4 clockwise from the top-right corner
+  if(a.dx >= 0.999) return (a.dy + 1) / 2;
+  if(a.dy >= 0.999) return 1 + (1 - a.dx) / 2;
+  if(a.dx <= -0.999) return 2 + (1 - a.dy) / 2;
+  return 3 + (a.dx + 1) / 2;
+}
+function anchorFromT(t){
+  t = ((t % 4) + 4) % 4;
+  if(t < 1) return { dx:1, dy:2 * t - 1 };
+  if(t < 2) return { dx:3 - 2 * t, dy:1 };
+  if(t < 3) return { dx:-1, dy:5 - 2 * t };
+  return { dx:2 * t - 7, dy:-1 };
+}
+function reanchor(w){
+  // Re-assign every line's exit point on its source memo so it faces the
+  // target memo (anchors used to stay frozen at their creation spot, so
+  // after memos moved, lines left from the far side and wrapped around,
+  // crossing others). Exits sharing one memo are spread around its frame
+  // in direction order so they do not tangle at the card.
+  var byNode = {};
+  w.edges.forEach(function(e){
+    var a = nodeById(e.from), b = nodeById(e.to);
+    if(!a || !b) return;
+    var anc = makeAnchor(a, borderPoint(a, b.x, b.y));
+    (byNode[e.from] = byNode[e.from] || []).push({ e:e, t:anchorT(anc) });
+  });
+  Object.keys(byNode).forEach(function(nid){
+    var list = byNode[nid].sort(function(p, q){ return p.t - q.t; });
+    if(list.length > 1){
+      var GAP = 0.34;
+      for(var i = 1; i < list.length; i++) list[i].t = Math.max(list[i].t, list[i - 1].t + GAP);
+      var span = list[list.length - 1].t - list[0].t;
+      if(span > 3.7){
+        var t0 = list[0].t, f = 3.7 / span;
+        list.forEach(function(it){ it.t = t0 + (it.t - t0) * f; });
+      }
+    }
+    list.forEach(function(it){ it.e.anchor = anchorFromT(it.t); });
+  });
+}
 function tidyLayout(){
   var w = cur(); if(!w || w.nodes.length < 2) return;
   var pos = {};
   w.nodes.forEach(function(n){ pos[n.id] = { x:n.x, y:n.y }; });
-  try{ localStorage.setItem(LS_UNDO, JSON.stringify({ worldId:w.id, pos:pos })); }catch(e){}
+  var anchors = {};
+  w.edges.forEach(function(e){ anchors[e.id] = e.anchor ? { dx:e.anchor.dx, dy:e.anchor.dy } : null; });
+  try{ localStorage.setItem(LS_UNDO, JSON.stringify({ worldId:w.id, pos:pos, anchors:anchors })); }catch(e){}
   var PAD = 26, ns = w.nodes;
   for(var iter = 0; iter < 240; iter++){
     var moved = false;
@@ -488,6 +531,7 @@ function tidyLayout(){
     }
     if(!moved) break;
   }
+  reanchor(w);
   selectedId = null; selectedEdgeId = null;
   saveOrWarn();
   fitWorld();
@@ -497,6 +541,7 @@ function undoTidy(){
   var u = loadUndo(), w = cur();
   if(!u || !w || u.worldId !== w.id) return;
   w.nodes.forEach(function(n){ var p = u.pos[n.id]; if(p){ n.x = p.x; n.y = p.y; } });
+  if(u.anchors) w.edges.forEach(function(e){ if(e.id in u.anchors){ var an = u.anchors[e.id]; e.anchor = an ? { dx:an.dx, dy:an.dy } : null; } });
   try{ localStorage.removeItem(LS_UNDO); }catch(e){}
   saveOrWarn();
   fitWorld();
