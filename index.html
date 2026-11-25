@@ -270,7 +270,13 @@ function cubicPt(p0, c1, c2, p1, t){
     y:u*u*u*p0.y + 3*u*u*t*c1.y + 3*u*t*t*c2.y + t*t*t*p1.y
   };
 }
-function edgeGeom(e){
+function edgeCurve(e){
+  // The single source of truth for an edge's rendered curve: start,
+  // control points and end, including the obstacle push that routes the
+  // curve around intermediate memo bodies. Both the drawn path and the
+  // crossing counter sample this, so tidy optimises the curve the user
+  // actually sees (an earlier version counted a push-free curve and its
+  // swaps did not move the visible crossings).
   var a = nodeById(e.from), b = nodeById(e.to);
   if(!a || !b) return null;
   if(!e.anchor){ var bp0 = borderPoint(a, b.x, b.y); e.anchor = makeAnchor(a, bp0); }
@@ -305,9 +311,14 @@ function edgeGeom(e){
       c2 = { x:c2.x - uy*push*side, y:c2.y + ux*push*side };
     }
   }
-  var d = "M "+start.x.toFixed(1)+" "+start.y.toFixed(1)+
-          " C "+c1.x.toFixed(1)+" "+c1.y.toFixed(1)+", "+c2.x.toFixed(1)+" "+c2.y.toFixed(1)+", "+end.x.toFixed(1)+" "+end.y.toFixed(1);
-  return { d:d, end:end, start:start };
+  return { start:start, c1:c1, c2:c2, end:end };
+}
+function edgeGeom(e){
+  var g = edgeCurve(e);
+  if(!g) return null;
+  var d = "M "+g.start.x.toFixed(1)+" "+g.start.y.toFixed(1)+
+          " C "+g.c1.x.toFixed(1)+" "+g.c1.y.toFixed(1)+", "+g.c2.x.toFixed(1)+" "+g.c2.y.toFixed(1)+", "+g.end.x.toFixed(1)+" "+g.end.y.toFixed(1);
+  return { d:d, end:g.end, start:g.start };
 }
 /* ---------- rendering ---------- */
 var viewport = document.getElementById("viewport");
@@ -527,21 +538,12 @@ function deoverlapNodes(w){
   }
 }
 function edgeSamplePts(e){
-  // Sampled points along an edge's curve, mirroring edgeGeom's control
-  // points but without the obstacle push, so crossing counts stay stable
-  // while positions are being tried out.
-  var a = nodeById(e.from), b = nodeById(e.to);
-  if(!a || !b) return null;
-  var anc = e.anchor || makeAnchor(a, borderPoint(a, b.x, b.y));
-  var start = anchorPoint(a, anc);
-  var end = borderPoint(b, start.x, start.y);
-  var dist = Math.hypot(end.x - start.x, end.y - start.y) || 1;
-  var reach = Math.min(150, Math.max(38, dist * 0.36));
-  var sn = sideNormal(a, start), en = sideNormal(b, end);
-  var c1 = { x:start.x + sn.x * reach, y:start.y + sn.y * reach };
-  var c2 = { x:end.x + en.x * reach, y:end.y + en.y * reach };
+  // Sample the edge's real rendered curve (edgeCurve, obstacle push
+  // included), so the crossing count matches what is drawn on screen.
+  var g = edgeCurve(e);
+  if(!g) return null;
   var pts = [];
-  for(var i = 0; i <= 12; i++) pts.push(cubicPt(start, c1, c2, end, i / 12));
+  for(var i = 0; i <= 12; i++) pts.push(cubicPt(g.start, g.c1, g.c2, g.end, i / 12));
   return pts;
 }
 function ptsBox(p){
@@ -587,7 +589,12 @@ function reduceCrossings(w){
   var best = countCrossings(w);
   if(best === 0) return 0;
   var startBest = best;
-  for(var pass = 0; pass < 12 && best > 0; pass++){
+  var stateKey = function(){
+    return w.nodes.map(function(n){ return n.id + ':' + Math.round(n.x) + ',' + Math.round(n.y); }).sort().join('|');
+  };
+  var seen = {};
+  seen[stateKey()] = true;
+  var strictPass = function(){
     var improved = false;
     for(var i = 0; i < w.nodes.length; i++){
       for(var j = i + 1; j < w.nodes.length; j++){
@@ -598,14 +605,45 @@ function reduceCrossings(w){
         a.x = bx; a.y = by; b.x = ax; b.y = ay;
         reanchor(w);
         var c = countCrossings(w);
-        if(c < best){ best = c; improved = true; }
+        if(c < best){ best = c; improved = true; seen[stateKey()] = true; }
         else {
           a.x = ax; a.y = ay; b.x = bx; b.y = by;
           w.edges.forEach(function(e){ e.anchor = savedAnchors[e.id]; });
         }
       }
     }
-    if(!improved) break;
+    return improved;
+  };
+  for(var pass = 0; pass < 12 && best > 0; pass++){
+    if(!strictPass()) break;
+  }
+  // Strict greedy can stall in a local minimum: one crossing left that no
+  // single swap removes. Try sideways swaps (same count, new layout) so a
+  // later swap can finish the job; visited layouts are never repeated.
+  for(var round = 0; round < 6 && best > 0; round++){
+    var moved = false;
+    for(var i = 0; i < w.nodes.length && best > 0; i++){
+      for(var j = i + 1; j < w.nodes.length && best > 0; j++){
+        var a2 = w.nodes[i], b2 = w.nodes[j];
+        var ax2 = a2.x, ay2 = a2.y, bx2 = b2.x, by2 = b2.y;
+        var saved2 = {};
+        w.edges.forEach(function(e){ saved2[e.id] = e.anchor; });
+        a2.x = bx2; a2.y = by2; b2.x = ax2; b2.y = ay2;
+        reanchor(w);
+        var c2 = countCrossings(w);
+        var key = stateKey();
+        if(c2 < best){ best = c2; moved = true; seen[key] = true; }
+        else if(c2 === best && !seen[key]){ moved = true; seen[key] = true; }
+        else {
+          a2.x = ax2; a2.y = ay2; b2.x = bx2; b2.y = by2;
+          w.edges.forEach(function(e){ e.anchor = saved2[e.id]; });
+        }
+      }
+    }
+    if(!moved) break;
+    for(var p2 = 0; p2 < 12 && best > 0; p2++){
+      if(!strictPass()) break;
+    }
   }
   return startBest - best;
 }
@@ -623,6 +661,10 @@ function tidyLayout(){
   // re-derive exits once more. This moves nodes only minimally.
   deoverlapNodes(w);
   reanchor(w);
+  // The final push-apart can itself re-create a crossing, and swaps trade
+  // whole positions so they cannot create a new overlap: run the swap
+  // pass last so the layout that ships is the one the counter measured.
+  reduceCrossings(w);
   selectedId = null; selectedEdgeId = null;
   saveOrWarn();
   fitWorld();
