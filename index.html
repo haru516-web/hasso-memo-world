@@ -357,10 +357,21 @@ function render(){
     else selectedEdgeId = null;
   }
   if(!focusEdges && selectedId && nodeById(selectedId)){
-    focusNodes = {}; focusNodes[selectedId]=true; focusEdges = {};
-    w.edges.forEach(function(x){
-      if(x.from===selectedId || x.to===selectedId){ focusEdges[x.id]=true; focusNodes[x.from]=true; focusNodes[x.to]=true; }
-    });
+    // Focus the whole chain: follow lines in both directions from the
+    // tapped memo all the way to both ends, not just direct neighbours.
+    focusNodes = {}; focusEdges = {};
+    var queue = [selectedId]; focusNodes[selectedId]=true;
+    while(queue.length){
+      var cid = queue.shift();
+      w.edges.forEach(function(x){
+        var other = null;
+        if(x.from===cid) other = x.to; else if(x.to===cid) other = x.from;
+        if(other !== null){
+          focusEdges[x.id]=true;
+          if(!focusNodes[other]){ focusNodes[other]=true; queue.push(other); }
+        }
+      });
+    }
   }
   nodesEl.innerHTML = "";
   w.nodes.forEach(function(n){
